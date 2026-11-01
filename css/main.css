@@ -1,0 +1,173 @@
+/* ==========================================================================
+   Town Dash — Minimal Host Stylesheet (Midnight & Daylight tokens + Fonts)
+   The board's own layout and dot-matrix lamp styling live in css/dotmatrix.css
+   and inline in index.html.
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Syne';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/syne-latin-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Syne Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/syne-mono-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('/fonts/archivo-latin-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-latin-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/ibm-plex-mono-latin-500.woff2') format('woff2');
+}
+
+:root {
+  color-scheme: dark;
+  --bg: #0b0b0c;
+  --surface: #121214;
+  --line: #222226;
+  --fg: #eceae4;
+  --muted: #98968f;
+  --faint: #67655f;
+  --gray-300: #b8b5ad;
+  --gray-800: #26262a;
+  --font-display: 'Syne', 'Archivo', sans-serif;
+  --font-body: 'Archivo', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-meta: 'IBM Plex Mono', monospace;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f1ea;
+  --surface: #eae6dd;
+  --line: #d6d0c4;
+  --fg: #181715;
+  --muted: #5c5952;
+  --faint: #87837a;
+  --gray-300: #4c4943;
+  --gray-800: #d6d0c4;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--fg);
+  color: var(--bg);
+  padding: 8px 12px;
+  z-index: 100;
+}
+.skip-link:focus {
+  left: 12px;
+  top: 12px;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px clamp(16px, 4vw, 48px);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-meta);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.nav-logo {
+  color: var(--fg);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.nav-links a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.nav-links a:hover,
+.nav-links a[aria-current="page"] {
+  color: var(--fg);
+}
+
+.mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  padding: 5px 10px;
+  font-family: var(--font-meta);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.mode-toggle:hover {
+  color: var(--fg);
+  border-color: var(--muted);
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 20px clamp(16px, 4vw, 48px);
+  border-top: 1px solid var(--line);
+  font-family: var(--font-meta);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+}
+
+.footer a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

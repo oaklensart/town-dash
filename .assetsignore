@@ -1,0 +1,15 @@
+.git
+node_modules
+.wrangler
+.dev.vars*
+.DS_Store
+.gitignore
+worker.js
+board.config.js
+wrangler.jsonc
+package.json
+package-lock.json
+vitest.config.js
+README.md
+src
+tests

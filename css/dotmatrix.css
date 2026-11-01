@@ -1,0 +1,124 @@
+/* =====================================================================
+   OAKLENS OS — the dot-matrix engine's look (js/dotmatrix.js). MIT.
+
+   A display is a host element with `.dm` and a `data-state`; everything you
+   see is set here, so a page restyles it with custom properties and never
+   touches the engine:
+
+     --dm-pitch    the distance between dots, which IS the size. A scoreboard
+                   reads well at 2px for a label (with its soft glow, 14px
+                   tall), 3px for small data and 6–8.5px for a value.
+     data-shape    on the host, `round` for a freeway sign's LEDs (square by
+                   default); a dot fills 0.8 of its pitch either way
+     --dm-unlit    how bright the unlit grid is, as a share of the colour
+     --dm-ok / --dm-go / --dm-warn / --dm-alert   each state's phosphor, as r, g, b
+     --dm-hot      the `hot` state's core: the phosphor overdriven toward
+                   white, while its bloom keeps the phosphor's hue (on
+                   paper, the heaviest ink instead)
+     --dm-idle     a label's colour, as r, g, b (near-white; grey ink on paper)
+     --dm-depth    how bright a line's bottom row is against its top (0.7):
+                   light falls off away from the lamp, as behind a diffuser
+     --dm-drift    how much one character may run dimmer than its neighbour
+                   (0.14): lamps are never matched, and identical ones read
+                   as print on glass rather than light
+
+   The states climb the emissive ladder: off (the dark board, grid only),
+   idle (a label: white ink at 88% with a soft glow, the scoreboard's), ok
+   (the phosphor), hot (the one thing to look at: a whiter core, a wider
+   bloom), go (green: a thing you were waiting on is holding, kept apart
+   from the teal of ok), warn (amber), alert (red, hotter glow), stale (a reading we no
+   longer trust: dimmed, no glow). `.dm-strike` flares a display once.
+   ===================================================================== */
+.dm {
+  --dm-pitch: 6px;
+  --dm-unlit: 0.09;
+  --dm-ok: 94, 242, 214;      /* vacuum-fluorescent teal (--vfd-rgb) */
+  --dm-go: 64, 230, 110;      /* LED green, a step off the teal toward yellow */
+  --dm-warn: 255, 175, 0;     /* amber, 256-colour 214 */
+  --dm-alert: 255, 48, 40;
+  --dm-hot: 228, 255, 249;
+  --dm-depth: 0.7;
+  --dm-drift: 0.14;
+  --dm-rgb: var(--dm-ok);
+  display: inline-block;
+  line-height: 0;
+  vertical-align: middle;
+  color: rgb(var(--dm-rgb));
+}
+.dm-svg {
+  display: block;
+  width: calc(var(--dm-pitch) * var(--dm-w, 5));
+  height: calc(var(--dm-pitch) * var(--dm-h, 7));
+  overflow: visible;
+  filter: var(--dm-glow, none);
+}
+/* dots are filled shapes (js/dotmatrix.js says why); each lit character's fill is its line's falloff */
+.dm-off,
+.dm-lit path {
+  fill: currentColor;
+  stroke: none;
+}
+.dm-off { opacity: var(--dm-unlit); }
+/* each lit character: its fixed drift (the engine's --h, 0..1) and its line's falloff */
+.dm-lit path { opacity: calc(1 - var(--dm-drift) * var(--h, 0)); }
+.dm-top { stop-color: currentColor; stop-opacity: 1; }
+.dm-bottom { stop-color: currentColor; stop-opacity: var(--dm-depth); }
+.dm-lit { opacity: var(--dm-lit, 1); transition: opacity 0.6s ease; }
+
+
+/* the light: a tight core and a wide pool, both the dots' own colour */
+.dm[data-state="ok"],
+.dm[data-state="go"],
+.dm[data-state="warn"] {
+  --dm-glow: drop-shadow(0 0 1.5px rgba(var(--dm-rgb), 0.85)) drop-shadow(0 0 8px rgba(var(--dm-rgb), 0.35));
+}
+.dm[data-state="go"] { --dm-rgb: var(--dm-go); }
+.dm[data-state="warn"] { --dm-rgb: var(--dm-warn); }
+.dm[data-state="alert"] {
+  --dm-rgb: var(--dm-alert);
+  --dm-glow: drop-shadow(0 0 2px rgba(var(--dm-rgb), 0.95)) drop-shadow(0 0 12px rgba(var(--dm-rgb), 0.5));
+}
+/* hot: the core runs toward white and the bloom keeps the phosphor's hue, as
+   an overdriven element does; it falls off less, because it is the source */
+.dm[data-state="hot"] {
+  --dm-rgb: var(--dm-hot);
+  --dm-depth: 0.84;
+  --dm-glow: drop-shadow(0 0 2px rgba(var(--dm-ok), 0.95)) drop-shadow(0 0 14px rgba(var(--dm-ok), 0.55));
+}
+.dm-strike { animation: dm-strike 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+@keyframes dm-strike {
+  0% { filter: brightness(2.4); }
+  18% { filter: brightness(1.7); }
+  100% { filter: brightness(1); }
+}
+.dm[data-state="idle"] {
+  --dm-rgb: var(--dm-idle, 224, 224, 224);
+  --dm-lit: 0.88;
+  --dm-glow: drop-shadow(0 0 3px rgba(var(--dm-rgb), 0.3));
+}
+.dm[data-state="off"] .dm-lit { opacity: 0; }
+.dm[data-state="stale"] { --dm-rgb: var(--dm-idle, 224, 224, 224); --dm-lit: 0.28; --dm-unlit: 0.06; }
+
+/* sizes, for pages that would rather name one than set a pitch */
+.dm--label { --dm-pitch: 2px; }
+.dm--small { --dm-pitch: 3px; }
+.dm--value { --dm-pitch: 8.5px; }
+.dm--hero  { --dm-pitch: 14px; }
+
+/* paper: a lamp is not a light source on a lit page, so no glow, darker ink.
+   Every colour here holds 5:1 or more on a light ground, and its dimmest dot
+   (bottom row, most drift) still 4:1; a label's grey still 4.5:1. The ladder
+   inverts: hot is the heaviest ink, not the palest, and a label is grey ink,
+   not near-white. Ink has no lamp behind it, so a line barely falls off and
+   characters barely drift (2026-10-31: the lamp's falloff faded the paper's
+   type toward the page) */
+:root[data-theme="light"] .dm {
+  --dm-glow: none; --dm-ok: 0, 100, 88; --dm-go: 10, 112, 46; --dm-warn: 150, 84, 0; --dm-alert: 196, 17, 17;
+  --dm-hot: 0, 74, 64; --dm-idle: 72, 68, 60; --dm-unlit: 0.12; --dm-depth: 0.94; --dm-drift: 0.06;
+}
+:root[data-theme="light"] .dm[data-state="hot"] { --dm-depth: 0.96; }
+
+@media (prefers-reduced-motion: reduce) {
+  .dm-lit { transition: none; }
+  .dm-strike { animation: none; }
+}

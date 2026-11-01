@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Town Dash</title>
+<meta name="description" content="Right now, on one board: the weather, the air, BART, the freeways, the tide, the creeks.">
+<!-- The share card (this instance draws it: scripts/city-og.mjs). The shared
+     title says LIVE so a first-time reader knows it is a board, not a post.
+     og:image / og:url are
+     root-relative on purpose: the worker absolutizes them at the edge. -->
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/syne-latin-var.woff2" crossorigin data-font-preload>
+<script>
+/* Pre-paint mode resolution: visitor override -> config default -> OS.
+   Runs before the stylesheet so there is no flash of the wrong mode. The
+   worker stamps data-theme-default on <html> and HTMLRewriter streams the
+   document top-down, so the attribute is present by the time this runs. */
+(function () {
+  var d = document.documentElement, s = null;
+  try { s = localStorage.getItem('ol-theme'); } catch (e) {}
+  var def = d.getAttribute('data-theme-default') || 'midnight';
+  var light = s ? s === 'light'
+    : def === 'auto' ? matchMedia('(prefers-color-scheme: light)').matches
+    : def === 'daylight';
+  if (light) d.setAttribute('data-theme', 'light');
+})();
+</script>
+<link rel="stylesheet" href="/css/main.css?v=47">
+<link rel="stylesheet" href="/css/dotmatrix.css?v=7">
+<script src="/js/town-scale.js?v=1"></script>
+<script src="/js/mode-toggle.js?v=1" defer></script>
+<link rel="sitemap" type="application/xml" href="/sitemap.xml">
+<style>
+/* ============================================
+   theCITY — the city's pulse on one dark board (src/api/city.js).
+   Lit only where it needs you: a panel warms for something worth a look
+   and goes hot for something to act on. Everything else is cold iron.
+   ============================================ */
+.city {
+  --bart: 0, 153, 216;               /* BART's blue (#0099D8): recognised at a glance, and 6.6:1 on black where the deep blue was 3.4:1 */
+  /* The board's words (names, notes, advisories) in a sturdy grotesk, as
+     transit signs set them, not the site's mono reading face: read at a
+     glance, and plainly apart from the lamps and from the page's other text
+     (owner, 2026-10-30). Archivo already ships (css/main.css); it sets a
+     long name like "pittsburg/bay point" a fifth narrower than Syne Mono. */
+  --font-board: 'Archivo', system-ui, sans-serif;
+  max-width: 1240px; margin: 0 auto; padding: 44px 40px 72px;
+}
+.city .dm { --dm-ok: 224, 224, 224; }
+/* The Midnight/Daylight switch in the bar, matched to the menu beside it (owner, 2026-10-31:
+   "equally weighted and scaled proportionally"): the menu's 1.5px rule and colour, a circle a
+   touch taller than its three lines, in a 40px target. The glyph is drawn, not a font's ◐,
+   so it turns on its own centre. It turns with the mode rather than on hover: dark half left in
+   Midnight, a half turn on every switch, the same under a mouse, a finger or a key (a phone's
+   hover sticks after a tap, which left the old spin stuck half round). */
+.nav-links .mode-toggle { position: relative; width: 40px; min-width: 40px; height: 40px; font-size: 0; color: var(--gray-300); transform: none; transition: color .2s ease; }
+.nav-links .mode-toggle::before { content: ''; position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+  border-radius: 50%; box-shadow: inset 0 0 0 1.5px currentColor; background: linear-gradient(90deg, currentColor 50%, transparent 50%);   /* a shadow ring, not a border: browsers round a border to whole pixels, and the menu's rules are 1.5px */
+  transition: transform .45s cubic-bezier(.4, 0, .2, 1); }
+:root[data-theme="light"] .nav-links .mode-toggle::before { transform: rotate(180deg); }
+.nav-links .mode-toggle:hover { transform: none; color: var(--fg); }
+/* A step quieter than the menu beside it (owner, 2026-11-01: "dim the day/night switch… closer
+   to half as bright"): about 40% of its light at night, and as faint as an icon may go and still
+   be seen, 3:1 against the bar, in both themes (Midnight 3.3:1 at 0.65; on paper the same would
+   be 2.6:1, so 0.78, 3.2:1). Full again under a pointer or a key. */
+.nav-links .mode-toggle { opacity: .65; transition: color .2s ease, opacity .2s ease; }
+:root[data-theme="light"] .nav-links .mode-toggle { opacity: .78; }
+.nav-links .mode-toggle:hover, .nav-links .mode-toggle:focus-visible,
+:root[data-theme="light"] .nav-links .mode-toggle:hover, :root[data-theme="light"] .nav-links .mode-toggle:focus-visible { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .nav-logo, .nav-links > *, .nav-hamburger, .nav-links .mode-toggle::before { transition: none; } }
+/* hidden means gone: a panel's own display (grid) must never outrank the hidden attribute */
+.city [hidden] { display: none !important; }
+.city .dm.vfd { --dm-ok: 94, 242, 214; }
+/* a holiday card, in its own colour (src/shared/city.js HOLIDAYS) */
+.city .dm.vfd[data-tone="pumpkin"] { --dm-ok: 255, 128, 24; }
+.city .dm.vfd[data-tone="marigold"] { --dm-ok: 255, 176, 32; }
+.city .dm.vfd[data-tone="gold"] { --dm-ok: 255, 206, 84; }
+.city .dm.vfd[data-tone="rose"] { --dm-ok: 255, 96, 140; }
+.city .dm.vfd[data-tone="pine"] { --dm-ok: 72, 214, 120; }
+/* an event card (src/shared/city.js EVENTS): the Valkyries' violet, as a lamp */
+.city .dm.vfd[data-tone="valkyrie"] { --dm-ok: 186, 128, 255; }
+.city .dm.bart { --dm-ok: var(--bart); }
+
+/* the verdict: one line, the most urgent true thing or ALL CLEAR */
+/* minmax(0, 1fr): the verdict sizes its dots to this width, so the track must not grow to fit the verdict */
+.c-head { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; padding-bottom: 30px; border-bottom: 1px solid var(--line); }
+/* the header, centred at every width: a headline sign, heavy and in the middle (owner, 2026-10-30) */
+.c-head { justify-items: center; text-align: center; }
+/* stretch, always: the verdict sizes its dots to this box, so the box must never size itself to the verdict */
+.c-verdict-box { min-width: 0; min-height: 56px; width: 100%; justify-self: stretch; }
+/* the headline's deck: a square for each card, the one showing lit. A display, nothing to press. */
+.c-pager { display: flex; justify-content: center; gap: 6px; margin: -4px 0 -2px; }
+.c-pager[hidden] { display: none; }
+.c-pager i { width: 5px; height: 5px; background: var(--muted); opacity: .3; transition: opacity .6s ease; }
+.c-pager i.on { opacity: .95; }
+.c-sub { font-family: var(--font-board); font-weight: 500; color: var(--muted); max-width: 70ch; margin: 0; font-size: 0.95rem; line-height: 1.55; }
+
+/* NOW: a strip of four tiles (time, temperature, light, and the 3-part air/barometer/wind bay) */
+.c-now { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--line); }
+.c-now > div { padding: 26px 22px 26px 0; display: grid; gap: 10px; align-content: start; justify-items: start; min-width: 0; }
+.c-now > div + div { padding-left: 22px; border-left: 1px solid var(--line); }
+/* one size per row (js/page-city.js evenNow): the row's smallest fitted pitch, or the readout's own until it is known */
+.c-now .dm--value .dm-svg { width: calc(var(--row-value, var(--dm-pitch)) * var(--dm-w, 5)); height: calc(var(--row-value, var(--dm-pitch)) * var(--dm-h, 7)); }
+.c-now .dm--label .dm-svg { width: calc(var(--row-label, var(--dm-pitch)) * var(--dm-w, 5)); height: calc(var(--row-label, var(--dm-pitch)) * var(--dm-h, 7)); }
+/* the fourth tile's 3-way split (owner, 2026-11-01): AQI across the top half, barometer and wind side by side below it,
+   all three displays matched to one pitch (--sub-value, --sub-label) so the strip gains two instruments without growing taller */
+.c-now > div.c-now-split { padding-right: 0; gap: 11px; }
+.c-now-top { display: grid; gap: 5px; align-content: start; justify-items: start; width: 100%; min-width: 0; }
+.c-now-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; padding-top: 11px; border-top: 1px solid var(--line); }
+.c-now-pair > div { display: grid; gap: 5px; align-content: start; justify-items: start; min-width: 0; padding-right: 14px; }
+.c-now-pair > div + div { padding-right: 0; padding-left: 14px; border-left: 1px solid var(--line); }
+.c-now-split .dm--sub .dm-svg { width: calc(var(--sub-value, var(--dm-pitch)) * var(--dm-w, 5)); height: calc(var(--sub-value, var(--dm-pitch)) * var(--dm-h, 7)); }
+.c-now-split .dm--label .dm-svg { width: calc(var(--sub-label, var(--dm-pitch)) * var(--dm-w, 5)); height: calc(var(--sub-label, var(--dm-pitch)) * var(--dm-h, 7)); }
+.c-now-split .c-meta { font-size: 0.78rem; line-height: 1.35; }
+
+/* No section titles: what each panel shows names it (owner, 2026-10-30:
+   "01 MOVING", "02 WATCHING" were redundant). The space between tiers is
+   the separation. */
+.c-tier { padding-top: 34px; }
+.c-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+
+/* a panel is smoked glass with one faint line round it, whatever is lit inside:
+   the warmth is the dots' own (amber, red), never the frame */
+.c-panel {
+  background: var(--surface, #0A0A0A); border: 1px solid var(--line); padding: 22px;
+  display: grid; gap: 12px; align-content: start; justify-items: start; min-width: 0; transition: box-shadow .8s ease, border-color .8s ease;
+}
+.c-wide { grid-column: 1 / -1; }
+#p-bart { grid-column: span 2; }   /* departures need the room */
+.c-panel > .dm--value { max-width: 100%; }
+.c-meta { font-family: var(--font-board); font-weight: 500; color: var(--muted); font-size: 0.84rem; line-height: 1.55; margin: 0; }
+.c-rows { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; width: 100%; }
+.c-rows li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; font-family: var(--font-board); font-weight: 500; font-size: 0.95rem; letter-spacing: 0.01em; color: var(--fg); }
+.c-rows li > span { min-width: 0; overflow-wrap: anywhere; }
+.c-rows li.c-one { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 6px; }
+.city { overflow-x: clip; }   /* a last guard: nothing on the board may scroll the page sideways */
+/* the city's stations, in line order: blue at rest, red where there's trouble */
+.c-stations { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 19px 20px; width: 100%; padding: 4px 0 21px; border-bottom: 1px solid var(--line); }
+/* BART on four steps of light. The count runs hot and its unit a step down,
+   one character's width apart, as one line on a sign. */
+.c-bart-big { --big: 8.5px; display: flex; align-items: flex-end; gap: calc(var(--big) * 6); }
+.c-bart-big .dm { --dm-pitch: var(--big); }
+#bart-u .dm-lit { opacity: 0.62; }
+/* stations at rest are a menu, not a reading: cooler, no bloom, so the picked
+   one (hot) and trouble (red) are what the eye finds */
+.c-tab .dm[data-state="ok"] { --dm-glow: none; --dm-depth: 0.6; }
+.c-tab .dm[data-state="ok"] .dm-lit { opacity: 0.66; }
+.c-tab-name { display: flex; align-items: center; gap: 9px; min-width: 0; width: 100%; }
+/* the name's own box: what is left after the pips, which is what its dots fit */
+.c-tab-dm { display: block; flex: 1 1 auto; min-width: 0; line-height: 0; }
+/* one size for every station name (js/page-city.js evenNow, --names): the smallest any of them fitted */
+.c-tab-dm .dm-svg { width: calc(var(--names, var(--dm-pitch)) * var(--dm-w, 5)); height: calc(var(--names, var(--dm-pitch)) * var(--dm-h, 7)); }
+/* the line squares (and a transfer's mark) in a slot as wide as the widest set (--pips, js/page-city.js
+   evenNow), set against the name, so the squares sit by their name and every name starts in one column */
+.c-pips { display: flex; justify-content: flex-end; gap: 3px; flex: none; min-width: var(--pips, 0px); }
+.c-pips i { width: 5px; height: 5px; background: var(--c); opacity: 0.9; }
+/* a station's "late" line hangs under its name, in the row gap (.c-stations), so a late station never
+   makes its row taller and leaves a hole beside the station next to it */
+.c-issue { color: rgb(255, 48, 40); font-size: .74rem; }
+.c-tab { position: relative; }
+.c-tab .c-issue { position: absolute; top: calc(100% + 2px); left: calc(var(--pips, 0px) + 9px); line-height: 1.3; white-space: nowrap; }
+/* departures: the next train hot, the ones after it cool */
+.c-mins { display: flex; gap: 12px; justify-content: flex-end; }
+.c-mins .dm[data-state="ok"] { --dm-glow: none; }
+.c-mins .dm[data-state="ok"] .dm-lit { opacity: 0.5; }
+.city .dm.bart { --dm-hot: 196, 236, 255; }
+/* the shelf: a plus in the line squares' column, then a square per train it
+   holds; the whole row is the button, and it rests as cool as a station tab */
+.c-rows li.c-more { grid-template-columns: minmax(0, 1fr); }
+.c-more button { display: flex; align-items: center; gap: 4px; width: 100%; min-height: 34px; margin: -6px 0; padding: 0;
+  background: none; border: 0; color: inherit; cursor: pointer; }
+.c-more .dm { --dm-pitch: 3px; --dm-glow: none; margin-right: 2px; line-height: 0; }
+.c-more .dm .dm-lit { opacity: 0.85; }
+.c-more i { width: 6px; height: 6px; background: var(--c); opacity: 0.9; }
+.c-more button:hover .dm { filter: brightness(1.25); }
+.c-more button:focus-visible { outline: 1px solid rgba(var(--bart), .9); outline-offset: 4px; }
+/* transfers: ⇄ ends the caption where BART plans a meet (MacArthur, 19th St),
+   and its colour is the answer before the tap; the tap opens the shelf under
+   the rows, which shares a drawer with the plus. Each transfer station's tab
+   carries a small ⇄ by its pips in the same colour, so the transfers read
+   from whichever station is picked. */
+.c-from { display: flex; align-items: center; gap: 10px; }
+/* a key, not a symbol: ONE dot-matrix display, a frame of dots with the mark
+   and the board's own plus inside it, as on every other drawer (owner,
+   2026-10-30: the mark alone read as decoration; a solid stroke broke the
+   lamps' look). Dimmer than the departures, whose numbers are the star here:
+   the frame and plus in BART's blue, low, and only the mark in the call's
+   colour. The 34px tap target is the button's. */
+.c-xfer { display: inline-flex; align-items: center; min-height: 34px; margin: -10px 0; padding: 0 2px;
+  background: none; border: 0; color: inherit; cursor: pointer; }
+.c-xfer[hidden], .c-xfer-shelf[hidden] { display: none; }
+.c-xfer .dm.c-key { --dm-pitch: 2.5px; --dm-w: 16; --dm-h: 11; --dm-glow: none; line-height: 0; }   /* over the states' glow: dim, not lit */
+.c-key .c-key-frame, .c-key .c-key-plus { fill: rgb(var(--dm-ok)); }
+.c-key .c-key-frame { opacity: 0.3; }
+.c-key .c-key-plus { opacity: 0.5; }
+.c-key .c-key-mark { fill: currentColor; opacity: 0.78; }
+.c-xfer:hover .c-key { filter: brightness(1.35); }
+.c-xfer:focus-visible { outline: 1px solid rgba(var(--bart), .9); outline-offset: 4px; }
+.c-pips { align-items: center; }
+/* in the pips' row, before the name: the name has room to spare beside it */
+.c-tab-x { flex: none; margin-left: 5px; }   /* 8px off the squares with their gap: room to read as its own mark */
+.c-xfer-shelf { display: grid; gap: 12px; width: 100%; min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }   /* min-width: the headline refits to the panel, never widens it */
+.c-xfer-shelf .c-line { width: 7px; height: 7px; margin-right: 2px; }
+.c-xfer-shelf .c-line + .c-line { margin-right: 9px; }
+.c-meet { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+.c-meet .dm[data-state="ok"] { --dm-glow: none; }
+.c-meet .dm[data-state="ok"] .dm-lit { opacity: 0.66; }
+/* BART's advisories: a delay in full with its time; the standing notices one quiet line with the plus's own mark, a tap away */
+.c-adv button { display: inline-flex; align-items: center; gap: 8px; min-height: 34px; margin: -8px 0; padding: 0;
+  background: none; border: 0; color: inherit; font: inherit; cursor: pointer; }
+.c-adv .dm { --dm-pitch: 3px; --dm-glow: none; line-height: 0; }
+.c-adv .dm .dm-lit { opacity: 0.6; }
+.c-adv button:hover .dm { filter: brightness(1.25); }
+.c-adv button:focus-visible { outline: 1px solid rgba(var(--bart), .9); outline-offset: 4px; }
+.c-adv-item { display: block; margin-top: 8px; color: var(--fg); }
+.c-adv-item:first-child { margin-top: 0; }
+.c-adv-item + button { margin-top: 2px; }
+.c-adv-time { margin-right: .6em; color: rgb(255, 175, 0); font-variant-numeric: tabular-nums; }
+/* one line each on a phone: a long destination ("pittsburg/bay point") trims rather than wraps */
+#bart-rows li > span:first-child, .c-xfer-shelf li > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* each station is a tab for its own departures: a thin blue rule under the one picked */
+/* align-content: a tab with no "late" line, stretched to its row by a neighbour that has one, keeps its name at the top */
+.c-tab { display: grid; gap: 5px; justify-items: start; align-content: start; min-width: 0; padding: 0 0 7px; margin: 0; background: none; border: 0;
+  border-bottom: 2px solid transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.c-tab[aria-pressed="true"] { border-bottom-color: rgba(var(--bart), .9); }
+.c-tab:hover .dm { filter: brightness(1.25); }
+.c-tab:focus-visible { outline: 1px solid rgba(var(--bart), .9); outline-offset: 4px; }
+/* min-width: its readout sizes its dots to this box, so the box must never size itself to the readout
+   (it did: the Bay Bridge's 11 MIN ran 19px out of its panel on a 1024px screen) */
+.c-sub-readout { display: grid; gap: 12px; justify-items: start; width: 100%; min-width: 0; padding-top: 18px; margin-top: 6px; border-top: 1px solid var(--line); }
+/* The Bay Bridge readout (js/page-city.js drawBridge): the minutes by day; when no sign is posting,
+   the bridge itself, up to two lines across the panel, and after hours a small purple crescent at its
+   left (owner, 2026-10-31: "a purple moon, just a little fun ornament"). The text's box takes what the
+   moon leaves and its dots fit that box, never the reverse; on a phone the moon sits above. */
+.c-bridge-row { display: flex; align-items: center; gap: 14px; width: 100%; min-width: 0; }
+.c-bridge-dm { display: block; flex: 1 1 auto; min-width: 0; line-height: 0; }
+.c-moon { flex: none; line-height: 0; --dm-pitch: 5px; }
+.c-moon[hidden] { display: none; }
+.c-bridge-row.is-stacked { flex-direction: column; align-items: flex-start; gap: 10px; }
+.c-bridge-row.is-stacked .c-bridge-dm { flex: none; width: 100%; }
+.c-bridge-row.is-stacked .c-moon { --dm-pitch: 4px; }
+.city .dm.c-moon { --dm-ok: 186, 128, 255; }
+:root[data-theme="light"] .city .dm.c-moon { --dm-ok: 98, 36, 168; }
+.c-enso { margin-top: 16px; font-size: .78rem; color: var(--faint); }
+.c-line { display: inline-block; width: 10px; height: 10px; margin-right: 10px; background: var(--line-color, var(--faint)); vertical-align: 0; }
+
+/* freeway signs: amber LEDs in a black housing, three lines of sixteen */
+.c-signs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; width: 100%; }
+/* the sign centred in its housing; its dots grow to fill it, up to an LED's 3.6px */
+.c-sign { background: #050505; border: 1px solid #222; box-shadow: inset 0 0 0 3px #0b0b0b; padding: 12px; display: grid; gap: 8px; justify-items: center; min-width: 0; }   /* min-width: so the housing follows its column and the sign refits, never the reverse */
+.c-sign .dm { --dm-unlit: .07; --dm-warn: 255, 175, 0; }
+.c-sign span.c-cap { font-family: var(--font-meta); font-size: .66rem; letter-spacing: .14em; color: var(--faint); text-transform: uppercase; }
+
+/* the tide's day: what happened, what's predicted, and the flood line */
+.c-tide svg { width: 100%; height: 96px; display: block; overflow: visible; }
+.c-tide .obs { fill: none; stroke: var(--fg); stroke-width: 1.6; }
+.c-tide .pred { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 4; }
+.c-tide .flood { stroke: rgb(255, 48, 40); stroke-width: 1; stroke-dasharray: 2 4; }
+.c-tide .now { stroke: var(--faint); stroke-width: 1; }
+.c-tide #tide-chart { width: 100%; }
+.c-legend { margin: 8px 0 0; font-family: var(--font-meta); font-size: .66rem; letter-spacing: .08em; color: var(--faint); display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.c-legend .k { display: inline-block; width: 16px; height: 0; border-top: 1.6px solid var(--fg); margin-right: 6px; vertical-align: middle; }
+.c-legend .k.pred { border-top: 1.2px dashed var(--muted); }
+.c-legend .k.flood { border-top: 1px dotted rgb(255, 48, 40); }
+.c-legend .k.now { width: 0; height: 10px; border-top: 0; border-left: 1px solid var(--faint); }
+
+/* the watching tier folds to one quiet line when everything in it is calm:
+   the board's plus and what it would show, the way the advisory line folds */
+.c-watch > summary { display: block; padding: 6px 0; margin: 0 0 12px; cursor: pointer; list-style: none;
+  font-family: var(--font-board); font-weight: 500; font-size: 0.84rem; line-height: 1.55; color: var(--muted); }
+.c-watch > summary::-webkit-details-marker { display: none; }
+.c-watch > summary .dm { --dm-pitch: 3px; --dm-glow: none; line-height: 0; margin-right: 8px; vertical-align: -3px; }   /* in the line, so it leads it when it wraps */
+.c-watch > summary .dm .dm-lit { opacity: 0.6; }
+.c-watch > summary:hover .dm { filter: brightness(1.25); }
+.c-watch > summary:focus-visible { outline: 1px solid var(--muted); outline-offset: 4px; }
+.c-watch[open] > summary .c-calm { display: none; }
+
+/* the page's last line, and anything signing it off at its end (stacked on a phone) */
+.c-foot { display: flex; align-items: center; justify-content: space-between; gap: 18px 24px; margin-top: 44px; padding-top: 18px; border-top: 1px solid var(--line); }
+.c-sources { margin: 0; font-family: var(--font-meta); font-size: .7rem; letter-spacing: .08em; color: var(--faint); line-height: 1.8; }
+.c-sources a { color: var(--muted); text-transform: uppercase; letter-spacing: .18em; text-decoration: none; border-bottom: 1px solid var(--line); }
+.c-sources a:hover, .c-sources a:focus-visible { color: var(--fg); border-bottom-color: var(--muted); }
+/* the board's own 88×31 sign at the foot, the 2× file at 1× so it stays sharp; it links to its page */
+.c-button { margin: 0; line-height: 0; flex: none; }
+.c-button a { display: inline-block; }
+.c-button img { image-rendering: pixelated; filter: drop-shadow(0 0 10px rgba(255, 158, 0, .18)); }
+
+/* Daylight: the board printed rather than lit (owner, 2026-10-31: "not providing
+   the level of contrast needed"). Each lamp colour above becomes its ink: the white
+   lamps near-black, the teal and BART's blue deep enough to hold 5:1 on paper,
+   the picked or hot one the heaviest ink, as FN 12's lattice does on light ground.
+   The cooler steps (a station at rest, the later trains) dim less, because dimming
+   ink fades it toward the paper. The freeway signs keep their lamps: their black
+   housing is the night they shine in. Midnight is untouched. */
+:root[data-theme="light"] .city { --bart: 0, 88, 150; }
+:root[data-theme="light"] .city .dm { --dm-ok: 38, 36, 32; --dm-hot: 0, 74, 64; }
+:root[data-theme="light"] .city .dm.vfd { --dm-ok: 0, 100, 88; }
+:root[data-theme="light"] .city .dm.vfd[data-tone="pumpkin"] { --dm-ok: 170, 64, 0; }
+:root[data-theme="light"] .city .dm.vfd[data-tone="marigold"] { --dm-ok: 150, 84, 0; }
+:root[data-theme="light"] .city .dm.vfd[data-tone="gold"] { --dm-ok: 116, 86, 0; }
+:root[data-theme="light"] .city .dm.vfd[data-tone="rose"] { --dm-ok: 176, 30, 84; }
+:root[data-theme="light"] .city .dm.vfd[data-tone="pine"] { --dm-ok: 12, 108, 54; }
+:root[data-theme="light"] .city .dm.vfd[data-tone="valkyrie"] { --dm-ok: 98, 36, 168; }
+:root[data-theme="light"] .city .dm.bart { --dm-ok: var(--bart); --dm-hot: 0, 58, 112; }
+:root[data-theme="light"] #bart-u .dm-lit { opacity: 0.9; }
+:root[data-theme="light"] .c-tab .dm[data-state="ok"] { --dm-depth: 0.94; }
+:root[data-theme="light"] .c-tab .dm[data-state="ok"] .dm-lit { opacity: 0.9; }
+:root[data-theme="light"] .c-mins .dm[data-state="ok"] .dm-lit,
+:root[data-theme="light"] .c-meet .dm[data-state="ok"] .dm-lit { opacity: 0.85; }
+:root[data-theme="light"] .c-adv .dm .dm-lit,
+:root[data-theme="light"] .c-watch > summary .dm .dm-lit { opacity: 0.85; }
+:root[data-theme="light"] .c-key .c-key-frame { opacity: 0.45; }
+:root[data-theme="light"] .c-key .c-key-plus { opacity: 0.7; }
+:root[data-theme="light"] .c-key .c-key-mark { opacity: 0.9; }
+:root[data-theme="light"] .c-sign .dm { --dm-warn: 255, 175, 0; --dm-unlit: .07; }
+:root[data-theme="light"] .c-issue { color: rgb(196, 17, 17); }
+:root[data-theme="light"] .c-adv-time { color: rgb(150, 84, 0); }
+
+/* NOW goes two by two before the panels go one column: four readouts of one size
+   (evenNow) in quarters of a tablet's width came out a third smaller than in halves */
+@media (max-width: 1100px) {
+  .c-now { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .c-now > div:nth-child(3) { padding-left: 0; border-left: 0; }
+  .c-now > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+  /* the light tile sits beside the taller AIR / BARO / WIND tile: centred down its height, its readout
+     meets the line under AIR rather than leaving a hole beneath (owner, 2026-11-01) */
+  .c-now > div:nth-child(3) { align-content: center; }
+}
+@media (max-width: 860px) {
+  #p-bart { grid-column: auto; }
+  .c-grid { grid-template-columns: minmax(0, 1fr); }
+  .city { padding: 28px 20px 56px; }
+}
+/* A phone reads down one axis: the board centres on it, and lists still run edge to edge. */
+@media (max-width: 600px) {
+  .c-now > div, .c-now-top, .c-now-pair > div, .c-panel, .c-sub-readout, .c-tab { justify-items: center; text-align: center; }
+  .c-now-pair > div { padding-right: 8px; }
+  .c-now-pair > div + div { padding-left: 8px; }
+  .c-now-split .c-meta { font-size: 0.72rem; }
+  .c-bridge-row, .c-bridge-row.is-stacked { flex-direction: column; align-items: center; gap: 10px; }
+  .c-bridge-dm { flex: none; width: 100%; text-align: center; }
+  .c-moon, .c-bridge-row.is-stacked .c-moon { --dm-pitch: 4px; }
+  .c-now > div, .c-now > div + div, .c-now > div:nth-child(3), .c-now > div.c-now-split { padding: 18px 10px; }
+  .c-panel { padding: 18px 16px; }
+  .c-watch > summary { text-align: center; }
+  .c-sources, .c-button, .c-enso { text-align: center; }
+  .c-foot { flex-direction: column; }
+  .c-rows, .c-stations, .c-signs, #tide-chart { justify-self: stretch; }
+  .c-rows li { text-align: left; }
+  .c-stations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .c-bart-big { --big: 5.5px; justify-content: center; }
+  .c-tab-name { flex-direction: column; gap: 10px; }   /* room under a transfer's mark, which sits by the squares */
+  /* the pips sit above the name here, so the mark goes beside them, out of the
+     flow: a tab in trouble is no taller than one at rest */
+  .c-pips { position: relative; min-width: 0; }
+  .c-tab .c-issue { left: 0; right: 0; text-align: center; }
+  .c-tab-x { position: absolute; left: 100%; top: 50%; margin-left: 8px; transform: translateY(-50%); }
+  .c-from { justify-content: center; }
+  .c-xfer-shelf { justify-self: stretch; justify-items: center; }
+  .c-tab-dm { width: 100%; text-align: center; }
+  /* smaller lamps need more drive to read as the same light */
+  .c-tab .dm[data-state="ok"] .dm-lit { opacity: 0.8; }
+  .c-legend { justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" role="banner">
+    <a href="/" class="nav-logo">Town Dash</a>
+    <nav class="nav-links" aria-label="Board">
+      <a href="/" aria-current="page">Board</a>
+      <a href="/sources/">Sources</a>
+      <button class="mode-toggle" id="modeToggle" type="button" aria-label="Switch color mode">◐</button>
+    </nav>
+  </header>
+
+<!-- ============ THE CITY ============ -->
+<main class="city" id="city" aria-busy="true">
+  <header class="c-head">
+    <span id="c-place" class="dm--label"></span>
+    <div class="c-verdict-box"><span id="c-verdict"></span></div>
+    <div class="c-pager" id="c-pager" aria-hidden="true" hidden></div>
+    <p class="c-sub" id="c-sub">Reading the city…</p>
+  </header>
+
+  <section class="c-now" aria-label="Now">
+    <div><span id="n-time-l" class="dm--label"></span><span id="n-time" class="dm--value vfd"></span><p class="c-meta" id="n-time-m"></p></div>
+    <div><span id="n-temp-l" class="dm--label"></span><span id="n-temp" class="dm--value"></span><p class="c-meta" id="n-temp-m"></p></div>
+    <div><span id="n-light-l" class="dm--label"></span><span id="n-light" class="dm--value"></span><p class="c-meta" id="n-light-m"></p></div>
+    <div class="c-now-split">
+      <div class="c-now-top"><span id="n-air-l" class="dm--label"></span><span id="n-air" class="dm--sub"></span><p class="c-meta" id="n-air-m"></p></div>
+      <div class="c-now-pair">
+        <div><span id="n-baro-l" class="dm--label"></span><span id="n-baro" class="dm--sub"></span><p class="c-meta" id="n-baro-m"></p></div>
+        <div><span id="n-wind-l" class="dm--label"></span><span id="n-wind" class="dm--sub"></span><p class="c-meta" id="n-wind-m"></p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="c-tier" aria-label="Moving">
+    <div class="c-grid">
+      <article class="c-panel" id="p-bart" hidden>
+        <span id="bart-l" class="dm--label"></span>
+        <div class="c-bart-big"><span id="bart-n" class="bart"></span><span id="bart-u" class="bart"></span></div>
+        <div class="c-stations" id="bart-stations" role="group" aria-label="Stations: pick one for its departures"></div>
+        <p class="c-meta c-from"><span id="bart-from"></span><button type="button" class="c-xfer" id="bart-xfer-btn" aria-expanded="false" hidden><span class="dm bart c-key" id="bart-xfer-g"></span></button></p>
+        <ul class="c-rows" id="bart-rows"></ul>
+        <div class="c-xfer-shelf" id="bart-xfer" hidden><span class="dm--small" id="bart-xfer-h"></span><ul class="c-rows" id="bart-xfer-rows"></ul></div>
+        <p class="c-meta c-adv" id="bart-m"></p>
+      </article>
+      <article class="c-panel" id="p-airport" hidden>
+        <span id="airport-l" class="dm--label"></span><span id="airport-v" class="dm--value"></span>
+        <p class="c-meta" id="airport-m"></p>
+        <div class="c-sub-readout" id="bridge" hidden>
+          <span id="bridge-l" class="dm--label"></span>
+          <div class="c-bridge-row"><span class="c-moon" id="bridge-moon" hidden></span><span class="c-bridge-dm"><span id="bridge-v"></span></span></div>
+          <p class="c-meta" id="bridge-m"></p>
+        </div>
+      </article>
+      <article class="c-panel c-wide" id="p-signs" hidden>
+        <span id="signs-l" class="dm--label"></span>
+        <div class="c-signs" id="signs"></div>
+        <p class="c-meta" id="signs-m"></p>
+      </article>
+    </div>
+  </section>
+
+  <details class="c-tier c-watch" id="watch">
+    <summary><span class="dm--small" id="watch-g"></span><span class="c-calm" id="watch-calm"></span></summary>
+    <div class="c-grid">
+      <article class="c-panel c-wide" id="p-alerts" hidden>
+        <span id="alerts-l" class="dm--label"></span>
+        <ul class="c-rows" id="alerts"></ul>
+      </article>
+      <article class="c-panel c-tide" id="p-tide" hidden>
+        <span id="tide-l" class="dm--label"></span><span id="tide-v" class="dm--value"></span>
+        <div id="tide-chart"></div>
+        <p class="c-meta" id="tide-m"></p>
+      </article>
+      <article class="c-panel" id="p-rain" hidden>
+        <span id="rain-l" class="dm--label"></span>
+        <ul class="c-rows" id="rain"></ul>
+        <p class="c-meta" id="rain-m"></p>
+      </article>
+      <article class="c-panel" id="p-quakes" hidden>
+        <span id="quakes-l" class="dm--label"></span>
+        <ul class="c-rows" id="quakes"></ul>
+      </article>
+    </div>
+    <p class="c-meta c-enso" id="c-enso" hidden></p>
+  </details>
+
+  <div class="c-foot">
+    <p class="c-sources"><a href="/sources/">Sources</a><span id="c-read"></span></p>
+  </div>
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer" role="contentinfo">
+    <span>Built with <a href="https://github.com/oaklensart/town-dash" rel="noopener">Town Dash</a></span>
+    <span class="footer-meta"><a href="/sources/">How this board works &amp; its sources</a></span>
+  </footer>
+<script type="module" src="/js/dotmatrix.js?v=10"></script>
+<script type="module" src="/js/page-city.js?v=37"></script>
+
+</body>
+</html>

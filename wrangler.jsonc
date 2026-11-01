@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "town-dash",
+  "main": "worker.js",
+  "compatibility_date": "2026-04-03",
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  }
+  // Optional secrets (set via `npx wrangler secret put <NAME>`):
+  //   BART_KEY        — BART real-time API key
+  //   TRAFFIC_511_KEY — 511.org SF Bay traffic events key
+}

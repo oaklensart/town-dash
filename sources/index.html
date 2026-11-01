@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Sources — Town Dash</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="preload" as="font" type="font/woff2" href="/fonts/syne-latin-var.woff2" crossorigin data-font-preload>
+<script>
+/* Pre-paint mode resolution: visitor override -> config default -> OS.
+   Runs before the stylesheet so there is no flash of the wrong mode. The
+   worker stamps data-theme-default on <html> and HTMLRewriter streams the
+   document top-down, so the attribute is present by the time this runs. */
+(function () {
+  var d = document.documentElement, s = null;
+  try { s = localStorage.getItem('ol-theme'); } catch (e) {}
+  var def = d.getAttribute('data-theme-default') || 'midnight';
+  var light = s ? s === 'light'
+    : def === 'auto' ? matchMedia('(prefers-color-scheme: light)').matches
+    : def === 'daylight';
+  if (light) d.setAttribute('data-theme', 'light');
+})();
+</script>
+<link rel="stylesheet" href="/css/main.css?v=47">
+<script src="/js/mode-toggle.js?v=1" defer></script>
+<style>
+/* ============================================
+   theCITY · SOURCES — where every reading on the board comes from.
+   Text only: the board's sections, in its order, each source with a page a
+   person can read and the exact feed the board reads.
+   ============================================ */
+.cs { max-width: 820px; margin: 0 auto; padding: 48px 40px 80px; font-family: var(--font-body); color: var(--fg); }
+.cs h1 { font-family: var(--font-display); font-size: 1.4rem; font-weight: 800; letter-spacing: 1px; margin: 0 0 10px; text-transform: uppercase; }
+.cs .lede { color: var(--muted); max-width: 62ch; margin: 0 0 8px; line-height: 1.6; font-size: .92rem; }
+.cs .back { font-family: var(--font-meta); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); text-decoration: none; border-bottom: 1px solid var(--line); }
+.cs .back:hover, .cs .back:focus-visible { color: var(--fg); }
+.cs h2 { font-family: var(--font-meta); font-weight: 400; font-size: .72rem; letter-spacing: .22em; color: var(--muted); margin: 40px 0 0; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.cs ul { list-style: none; margin: 0; padding: 0; }
+.cs li { padding: 14px 0; border-bottom: 1px solid var(--line); line-height: 1.6; font-size: .92rem; }
+.cs li .by { color: var(--muted); }
+.cs li a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--line-2, var(--line)); margin-right: 14px; font-family: var(--font-meta); font-size: .78rem; letter-spacing: .06em; }
+.cs li a:hover, .cs li a:focus-visible { border-bottom-color: var(--fg); }
+.cs .links { display: block; margin-top: 4px; }
+.cs .note { color: var(--faint); font-size: .8rem; margin-top: 28px; }
+@media (max-width: 600px) { .cs { padding: 32px 20px 64px; } }
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav" role="banner">
+    <a href="/" class="nav-logo">Town Dash</a>
+    <nav class="nav-links" aria-label="Board">
+      <a href="/">Board</a>
+      <a href="/sources/" aria-current="page">Sources</a>
+      <button class="mode-toggle" id="modeToggle" type="button" aria-label="Switch color mode">◐</button>
+    </nav>
+  </header>
+
+<!-- ============ SOURCES ============ -->
+<main class="cs">
+  <h1>Sources</h1>
+  <p class="lede">Every reading on the city board, in the order the board shows them: a page to read, and the exact feed the board reads.</p>
+  <p><a class="back" href="/">&larr; The board</a></p>
+  <div id="sources" aria-live="polite"><p class="note">Reading the list&hellip;</p></div>
+  <p class="note">The board reads each of these on its own clock, from every 20 seconds (BART) to twice a day (El Ni&ntilde;o), and keeps the last good answer when one fails. It never shows a number it was not given.</p>
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer" role="contentinfo">
+    <span>Built with <a href="https://github.com/oaklensart/town-dash" rel="noopener">Town Dash</a></span>
+    <span class="footer-meta"><a href="/">Back to the board</a></span>
+  </footer>
+<script type="module" src="/js/page-city-sources.js?v=1"></script>
+
+</body>
+</html>
