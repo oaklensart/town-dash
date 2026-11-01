@@ -1,3 +1,4 @@
+<img width="1449" height="2050" alt="OAKLENSart_Town-Dash_Screenshot" src="https://github.com/user-attachments/assets/1848e509-15b3-4a7d-b1e3-d94a5cbf1afd" />
 # Town Dash
 
 A live dot-matrix civic status board for a town or region, running on Cloudflare Workers.
